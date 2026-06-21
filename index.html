@@ -298,6 +298,125 @@
   }
   .color-pair > div { flex: 1; }
   .color-pair input[type=color] { height: 32px; }
+
+  /* ===== 步骤引导（Onboarding Tour） ===== */
+  .tour-mask {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.65);
+    z-index: 9998;
+    display: none;
+    pointer-events: none;
+  }
+  .tour-mask.active { display: block; }
+
+  .tour-card {
+    position: fixed;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9999;
+    background: #1a1412;
+    color: #f5e9d4;
+    border: 2px solid #e8c98a;
+    border-radius: 12px;
+    padding: 24px 28px 20px;
+    width: min(560px, calc(100vw - 40px));
+    box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+    display: none;
+    font-family: inherit;
+  }
+  .tour-card.active { display: block; }
+
+  .tour-step {
+    font-size: 12px;
+    color: #e8c98a;
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+    font-weight: bold;
+  }
+  .tour-title {
+    font-size: 20px;
+    color: #f5e9d4;
+    margin: 0 0 8px;
+    font-weight: bold;
+  }
+  .tour-desc {
+    font-size: 14px;
+    color: #d4bfa8;
+    line-height: 1.6;
+    margin: 0 0 18px;
+  }
+  .tour-progress {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 18px;
+    justify-content: center;
+  }
+  .tour-dot {
+    width: 28px;
+    height: 4px;
+    background: #5c3e32;
+    border-radius: 2px;
+    transition: background 0.2s;
+  }
+  .tour-dot.active { background: #e8c98a; }
+
+  .tour-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+  .tour-left { display: flex; gap: 8px; }
+  .tour-right { display: flex; gap: 8px; }
+  .tour-btn {
+    background: transparent;
+    color: #a89375;
+    border: 1px solid #5c3e32;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 13px;
+    cursor: pointer;
+    font-family: inherit;
+    letter-spacing: 1px;
+    transition: all 0.15s;
+  }
+  .tour-btn:hover:not(:disabled) {
+    background: #2b1d1a;
+    color: #f5e9d4;
+    border-color: #a34838;
+  }
+  .tour-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+  .tour-btn.primary {
+    background: #a34838;
+    color: #fff;
+    border-color: #c85a48;
+  }
+  .tour-btn.primary:hover:not(:disabled) { background: #c85a48; }
+
+  .tour-help {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 9000;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: #a34838;
+    color: #fff;
+    border: 2px solid #c85a48;
+    font-size: 20px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-family: inherit;
+    transition: transform 0.15s;
+  }
+  .tour-help.show { display: flex; }
+  .tour-help:hover { transform: scale(1.1); background: #c85a48; }
 </style>
 </head>
 <body>
@@ -1018,7 +1137,101 @@
 
   $('btnAI').addEventListener('click', callDeepSeek);
 
+  // ========== 步骤引导（Onboarding Tour） ==========
+  const TOUR_KEY = 'redphoto_tour_seen_v1';
+
+  const tourSteps = [
+    { title: '上传照片', desc: '把你的照片拖进左边的虚线框，或点击框内任意位置选择文件。支持 JPG / PNG。' },
+    { title: '写一句正式标题', desc: '切到「文案」Tab，第一行写主标题（例如"2026年6月，青年同志同游中山陵"），第二行补充说明。也可以在多行输入框里自由发挥。' },
+    { title: '让 AI 帮你写', desc: '懒得自己想？切到「AI助手」Tab，描述一下照片内容，点生成按钮，DeepSeek 会自动生成符合红色纪念馆风格的批注文字。' },
+    { title: '调样式 · 实时预览', desc: '切到「样式」Tab 滑动字号、红框高度、颜色深浅，右边会实时显示效果。嫌麻烦？每个 Tab 里都有「快捷预设」一键套用。' },
+    { title: '泛黄滤镜 · 导出', desc: '切到「滤镜」Tab 开启泛黄复古滤镜，最后点「下载图片」或「复制到剪贴板」，完成！' }
+  ];
+
+  let tourIndex = 0;
+
+  function showTourStep(idx) {
+    document.querySelectorAll('.tour-dot').forEach((d, i) => {
+      d.classList.toggle('active', i <= idx);
+    });
+    const step = tourSteps[idx];
+    document.querySelector('.tour-step').textContent = `STEP ${idx + 1} / ${tourSteps.length} · ${step.title}`;
+    document.querySelector('.tour-title').textContent = `第 ${idx + 1} 步 · ${step.title}`;
+    document.querySelector('.tour-desc').textContent = step.desc;
+    document.getElementById('tourPrev').disabled = idx === 0;
+    const nextBtn = document.getElementById('tourNext');
+    nextBtn.textContent = idx === tourSteps.length - 1 ? '开始使用 ✓' : '下一步 →';
+  }
+
+  function startTour() {
+    tourIndex = 0;
+    document.getElementById('tourMask').classList.add('active');
+    document.getElementById('tourCard').classList.add('active');
+    document.getElementById('tourHelp').classList.remove('show');
+    showTourStep(0);
+  }
+
+  function endTour() {
+    document.getElementById('tourMask').classList.remove('active');
+    document.getElementById('tourCard').classList.remove('active');
+    document.getElementById('tourHelp').classList.add('show');
+    try { localStorage.setItem(TOUR_KEY, '1'); } catch(e) {}
+  }
+
+  document.getElementById('tourNext').addEventListener('click', () => {
+    if (tourIndex < tourSteps.length - 1) {
+      tourIndex++;
+      showTourStep(tourIndex);
+    } else {
+      endTour();
+    }
+  });
+  document.getElementById('tourPrev').addEventListener('click', () => {
+    if (tourIndex > 0) {
+      tourIndex--;
+      showTourStep(tourIndex);
+    }
+  });
+  document.getElementById('tourSkip').addEventListener('click', endTour);
+  document.getElementById('tourHelp').addEventListener('click', startTour);
+
+  // 页面加载完后，如果是第一次访问，自动弹出引导
+  window.addEventListener('load', () => {
+    let seen = false;
+    try { seen = localStorage.getItem(TOUR_KEY) === '1'; } catch(e) {}
+    if (!seen) {
+      setTimeout(startTour, 600);
+    } else {
+      document.getElementById('tourHelp').classList.add('show');
+    }
+  });
+
 })();
 </script>
+
+  <!-- 步骤引导 -->
+  <div id="tourMask" class="tour-mask"></div>
+  <div id="tourCard" class="tour-card">
+    <div class="tour-step">STEP 1 / 5</div>
+    <div class="tour-title">第 1 步 · 上传照片</div>
+    <div class="tour-desc">把你的照片拖进左边的虚线框，或点击框内任意位置选择文件。支持 JPG / PNG。</div>
+    <div class="tour-progress">
+      <div class="tour-dot active"></div>
+      <div class="tour-dot"></div>
+      <div class="tour-dot"></div>
+      <div class="tour-dot"></div>
+      <div class="tour-dot"></div>
+    </div>
+    <div class="tour-actions">
+      <div class="tour-left">
+        <button id="tourPrev" class="tour-btn" disabled>← 上一步</button>
+        <button id="tourSkip" class="tour-btn">跳过</button>
+      </div>
+      <div class="tour-right">
+        <button id="tourNext" class="tour-btn primary">下一步 →</button>
+      </div>
+    </div>
+  </div>
+  <button id="tourHelp" class="tour-help" title="重新播放使用指引">?</button>
 </body>
 </html>
